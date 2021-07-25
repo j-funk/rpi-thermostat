@@ -8,6 +8,7 @@ class ThermostatModes():
     MANUAL = 'manual'
     OFF = 'off'
 
+# Unused, delete
 def get_ro_conn():
     return sqlite3dbm.sshelve.open(conf.SETPOINT_DB, 'r')
 

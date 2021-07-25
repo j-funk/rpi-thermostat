@@ -1,5 +1,8 @@
 #!/bin/bash
 
+# Instead of rsync we should pull the repo from git and use Docker images / containers or similar
+# IPs should be extracted to config layer
+
 rm  temp_setpoints.sqlite3
 rm -r *pyc
 rsync -av --exclude='venv' --exclude='.git' --exclude='.idea' . pi@192.168.1.214:~/rpi-thermostat

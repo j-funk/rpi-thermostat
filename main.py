@@ -7,16 +7,21 @@ import collections
 import datetime
 import conf
 
+# To help avoid confusion import statements should be organized as:
+# standard library,
+# 3rd party dependencies,
+# then local imports
+
 import flask
 import flask.json
 from flask import request
 import logging
 import time
 import os
-import rpi_relay
-import state
-import Queue
-import werkzeug.exceptions
+import rpi_relay  # local
+import state   # local
+import Queue  # followed by standard library
+import werkzeug.exceptions  # followed by 3rd party
 
 from apscheduler.schedulers.background import BackgroundScheduler
 
@@ -32,10 +37,15 @@ def get_request_db():
     if db is None:
         # open a new connection as needed -- throughput doesn't need to be high for this!
         db = flask.g._database = state.get_conn()
+    # We are assuming here that db has successfully received a connection
+    #  methods that depend on this connection will fail unpredictably if `db`
+    #  is still None
     return db
 
 @app.teardown_appcontext
 def close_connection(exception):
+    # We should check the exceptions and log / report them
+    #  or register and errorhandler()
     db = getattr(flask.g, '_database', None)
     if db is not None:
         db.close()
@@ -45,12 +55,21 @@ def to_farenheit(c):
 
 def get_setpoint(hour, db=None):
     "Returns the temp setpoint for the given hour of day"
+    # This condition is redundant,
+    #  we should remove the default and call get_request_db() prior to calling
+    #  get_setpoint()
     if db is None:
         db = get_request_db()
+    # Pep line length, won't mention again
     setpoint_key = [set_hr for set_hr in TEMP_SETPOINT_HOURS if hour >= set_hr][-1]
+    # Could avoid passing the db dependency around since it is not used to retrieve the key
+    #  then could rename this method to get_setpoint_key(), or since it is used once,
+    #  we could reduce indirection by bringing line 65 back to `bangbang_controller()`
     return db[setpoint_key]
 
 def parse_setpoints(json_form):
+    # Method will be easier / cleaner to test if we remove the flask dependency
+    #  by loading the json before calling
     form = flask.json.loads(json_form['setpoints'])
     setpoints = {}
 
@@ -64,6 +83,9 @@ def parse_setpoints(json_form):
         else:
             raise Exception("setpoint %s not valid" % setpoint)
     return setpoints
+
+
+# The following endpoints would all benefit from some Sphinx or pdoc autodocs
 
 @app.route('/api/v1/setpoints/', methods=('POST', 'GET'))
 def handle_setpoints_request():
@@ -89,6 +111,7 @@ def handle_thermostat_mode():
 
     if request.method == 'POST':
         mode = request.form.get('mode')
+        # Do we want HTML errors or should we return JSON errors?
         assert mode in [state.ThermostatModes.AUTO, state.ThermostatModes.MANUAL, state.ThermostatModes.OFF]
         state.CURRENT_MODE = mode
         return flask.json.jsonify({'mode': state.CURRENT_MODE})
@@ -106,7 +129,7 @@ def handle_temp():
         now = time.time()
         state.TEMPERATURE_READINGS.append((now, temp))
         state.HUMIDITY_READINGS.append((now, humidity))
-        return 'ok'
+        return 'ok'  # inconsistent with other json return values
     if request.method == 'GET':
         temperatures = [x for x in state.TEMPERATURE_READINGS]
         humidities = [x for x in state.HUMIDITY_READINGS]
@@ -173,7 +196,7 @@ def bangbang_controller():
         return
 
 
-    conn = state.get_conn()
+    conn = state.get_conn()  # should use get_request_db()
     temp_read_time, most_recent_temp = state.TEMPERATURE_READINGS[-1]
     humid_read_time, most_recent_humidity = state.HUMIDITY_READINGS[-1]
 
@@ -183,8 +206,9 @@ def bangbang_controller():
         return
 
     now = datetime.datetime.now()
-    current_setpoint = get_setpoint(now.hour, db=conn)
+    current_setpoint = get_setpoint(now.hour, db=conn)  # don't pass db, keep it here, use it before method
 
+    # current_setpoint could be None
     if (most_recent_temp - current_setpoint) > (conf.HYSTERESIS_TEMP / 2.0):
         turn_on_event = (time.time(), True)
         state.EVENT_QUEUE.put(turn_on_event)
@@ -202,6 +226,7 @@ def resources(path):
 
 @app.route('/')
 def index():
+    # Use the STATIC_DIR global instead of hard coded string
     return flask.send_file('static/index.html')
 
 if __name__ == '__main__':

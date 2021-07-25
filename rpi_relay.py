@@ -3,6 +3,10 @@ import logging
 import time
 from state import MOST_RECENT_ON_KEY, MOST_RECENT_OFF_KEY
 import conf
+
+# I think we would need to remove the mock entirely,
+#  no mocks in production code - would add it
+#  into a test suite perhaps and pass the mock instance as a dependency
 try:
     import RPi.GPIO as GPIO
 except ImportError, e:
@@ -31,6 +35,8 @@ except ImportError, e:
 
 
 def can_turn_on(current_epoch_time, db):
+    # instead of passing the db, pass `last_on_epoch` so this method
+    #  is testable without the db dependency
     last_off_epoch = db.get(MOST_RECENT_OFF_KEY)
     logging.debug(last_off_epoch)
     if (last_off_epoch is None) or (current_epoch_time - last_off_epoch) > conf.MIN_OFF_TIME:
@@ -40,6 +46,8 @@ def can_turn_on(current_epoch_time, db):
     return False
 
 def can_turn_off(current_epoch_time, db):
+    # instead of passing the db, pass `last_on_epoch` so this method
+    #  is testable without the db dependency
     last_on_epoch = db.get(MOST_RECENT_ON_KEY)
     if (last_on_epoch is None) or (current_epoch_time - last_on_epoch) > conf.MIN_ON_TIME:
         return True
@@ -47,7 +55,7 @@ def can_turn_off(current_epoch_time, db):
         logging.warn('cannot turn off')
     return False
 
-def init_RPi():
+def init_RPi():  # here's where we could add the mock dependency injection
     GPIO.setmode(GPIO.BOARD)
     GPIO.setup(conf.AC_RELAY_PIN, GPIO.OUT)
 
@@ -66,6 +74,8 @@ def _set_ac_off(db):
         db[MOST_RECENT_OFF_KEY] = time.time()
         logging.warn("turned AC off")
 
+# Throughout the code, variables `conn` and `db` are synonymous -
+#  please pick one or the other not both, or `db_conn` is more descriptive
 def set_ac_relay(status, conn):
     if bool(status) is True:
         _set_ac_on(conn)
